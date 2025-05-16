@@ -25,7 +25,7 @@
         "y": 10
     },
     "network_widget": {
-        "enabled": true,
+        "enabled": false,
         "x": 1326,
         "y": 10
     },

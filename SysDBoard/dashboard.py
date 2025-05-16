@@ -10,6 +10,7 @@ import pystray
 from PIL import Image
 import win32com.client
 import sys
+import shutil
 
 # =====================
 # System Resource Dashboard - Main Application
@@ -28,7 +29,31 @@ import sys
 # =====================
 
 # Configuration file to store widget states and positions
-CONFIG_FILE = "widget_config.json"
+def ensure_config_file():
+    """
+    Ensures widget_config.json exists in SysDBoard. If not, copies from project root or creates default.
+    """
+    config_path = os.path.join(os.path.dirname(__file__), "widget_config.json")
+    root_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "widget_config.json"))
+    if not os.path.exists(config_path):
+        if os.path.exists(root_path):
+            shutil.copy2(root_path, config_path)
+        else:
+            # Create default config if not found anywhere
+            default_config = {
+                "cpu_widget": {"enabled": True, "x": 0, "y": 0},
+                "ram_widget": {"enabled": True, "x": 0, "y": 0},
+                "disk_widget": {"enabled": True, "x": 0, "y": 0},
+                "battery_widget": {"enabled": True, "x": 0, "y": 0},
+                "risk_widget": {"enabled": True, "x": 0, "y": 0},
+                "network_widget": {"enabled": True, "x": 0, "y": 0},
+                "refresh_rate": 2.0
+            }
+            with open(config_path, 'w') as f:
+                json.dump(default_config, f, indent=4)
+
+CONFIG_FILE = os.path.join(os.path.dirname(__file__), "widget_config.json")
+ensure_config_file()
 
 # --- Config functions ---
 def load_config():
