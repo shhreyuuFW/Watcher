@@ -1,0 +1,33 @@
+{
+    "cpu_widget": {
+        "enabled": true,
+        "x": 326,
+        "y": 10
+    },
+    "ram_widget": {
+        "enabled": true,
+        "x": 526,
+        "y": 10
+    },
+    "disk_widget": {
+        "enabled": true,
+        "x": 726,
+        "y": 10
+    },
+    "battery_widget": {
+        "enabled": true,
+        "x": 926,
+        "y": 10
+    },
+    "risk_widget": {
+        "enabled": true,
+        "x": 1126,
+        "y": 10
+    },
+    "network_widget": {
+        "enabled": false,
+        "x": 1326,
+        "y": 10
+    },
+    "refresh_rate": 2.0
+}

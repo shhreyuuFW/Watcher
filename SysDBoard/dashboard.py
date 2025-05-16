@@ -35,6 +35,7 @@ def load_config():
     """
     Loads the widget configuration from file or returns default config.
     Used at startup to restore widget state and positions.
+    (YOU NEED TO DELETE THIS FILE IF YOU CHNAGE THE POSITION OF A WIDGET!!!)
     """
     default_config = {
         "cpu_widget": {"enabled": True, "x": 0, "y": 0},
@@ -58,7 +59,7 @@ def save_config(config):
     with open(CONFIG_FILE, 'w') as f:
         json.dump(config, f, indent=4)
 
-# --- Risk/Warning Logic ---
+# --- Risk/Warning Logic --- (subject to change, really)
 def get_risk_level(value, thresholds):
     """
     Returns risk level and color based on value and thresholds.
@@ -71,43 +72,57 @@ def get_risk_level(value, thresholds):
     else:
         return "Low Risk", "green"
 
-def get_risk_color(widget_name, value):
+def get_risk_color(widget_name, value, theme="light"):
     """
-    Returns the color for the usage text based on widget type and value.
+    Returns the color for the usage text based on widget type, value, and theme.
     Used by each widget to color its usage dynamically.
     """
-    if widget_name == "cpu":
-        # CPU: red > 75, orange > 50, yellow > 25, green <= 25
-        if value > 75:
-            return "red"
-        elif value > 50:
-            return "orange"
-        elif value > 25:
-            return "yellow"
-        else:
-            return "green"
-    elif widget_name == "ram" or widget_name == "disk":
-        # RAM/Disk: red > 90, orange > 75, yellow > 50, green <= 50
-        if value > 90:
-            return "red"
-        elif value > 75:
-            return "orange"
-        elif value > 50:
-            return "yellow"
-        else:
-            return "green"
-    elif widget_name == "battery":
-        # Battery: red < 20, orange < 50, yellow < 75, green >= 75
-        if value < 20:
-            return "red"
-        elif value < 50:
-            return "orange"
-        elif value < 75:
-            return "yellow"
-        else:
-            return "green"
+    # Define color sets for dark and light themes
+    if theme == "dark":
+        colors = {
+            "red": "#ff5555",
+            "orange": "#ffae42",
+            "yellow": "#ffff55",
+            "green": "#55ff55",
+            "default": "#ffffff"
+        }
     else:
-        return "white"
+        colors = {
+            "red": "#b22222",
+            "orange": "#ff8c00",
+            "yellow": "#bdb76b",
+            "green": "#228b22",
+            "default": "#222222"
+        }
+    if widget_name == "cpu":
+        if value > 75:
+            return colors["red"]
+        elif value > 50:
+            return colors["orange"]
+        elif value > 25:
+            return colors["yellow"]
+        else:
+            return colors["green"]
+    elif widget_name == "ram" or widget_name == "disk":
+        if value > 90:
+            return colors["red"]
+        elif value > 75:
+            return colors["orange"]
+        elif value > 50:
+            return colors["yellow"]
+        else:
+            return colors["green"]
+    elif widget_name == "battery":
+        if value < 20:
+            return colors["red"]
+        elif value < 50:
+            return colors["orange"]
+        elif value < 75:
+            return colors["yellow"]
+        else:
+            return colors["green"]
+    else:
+        return colors["default"]
 
 # --- Widget Class ---
 class ResourceWidget:
@@ -127,6 +142,7 @@ class ResourceWidget:
         self.thresholds = thresholds
         self.running = False
         self.thread = None
+        self.theme = None  # Will be set in create_widget
 
     def create_widget(self):
         """
@@ -136,15 +152,27 @@ class ResourceWidget:
         if not self.enabled:
             return
         self.root = tk.Toplevel()
+
         self.root.overrideredirect(True)  # Remove titlebar
+        self.root.attributes('-alpha', 0.9)
         self.root.title(self.title)
-        # Remove fixed geometry, let window size to content
         self.root.attributes('-topmost', True)
-        self.root.resizable(True, True)  # Allow resizing
-        # Apply dark theme
+        self.root.resizable(False, False)  # Prevent manual resizing
+
+        # --- Theme Switcher (Dark/Light) --- (UNCOMMENT TO USE)
+        # To switch between dark and light themes, comment/uncomment the relevant block below.
+
+        #  --- DARK THEME ---
+        self.theme = "dark"
         self.root.configure(bg='#2b2b2b')
-        self.label = ttk.Label(self.root, text="Initializing...", font=("Arial", 12), foreground='#ffffff', background='#2b2b2b')
-        self.label.pack(padx=15, pady=15)
+        self.label = ttk.Label(self.root, text="Initializing...", font=("Arial", 12), foreground='#ffffff', background='#2b2b2b', justify="left", anchor="nw")
+
+        # --- LIGHT THEME ---
+        # self.theme = "light"
+        # self.root.configure(bg='#f0f0f0')
+        # self.label = ttk.Label(self.root, text="Initializing...", font=("Arial", 12), foreground='#2b2b2b', background='#f0f0f0', justify="left", anchor="nw")
+
+        self.label.pack(padx=15, pady=15, fill="both", expand=True)
         self.root.update_idletasks()  # Let Tkinter calculate window size
         width = self.root.winfo_width()
         height = self.root.winfo_height()
@@ -174,18 +202,27 @@ class ResourceWidget:
         while self.running and self.root:
             try:
                 value = self.get_data_func()
-                # For widgets with percentage, extract the numeric value
-                if self.name in ["cpu", "ram", "disk", "battery"]:
+                if self.name == "risk":
+                    # For risk widget, use left/top alignment and let label auto-resize
+                    color = "#222222" if getattr(self, "theme", "light") == "light" else "#ffffff"
+                    text = f"{self.title}\n{value}"
+                    self.root.after(0, lambda: [
+                        self.label.config(text=text, foreground=color, justify="left", anchor="nw"),
+                        self.label.update_idletasks(),
+                        self.root.geometry("")  # Let window auto-resize to label
+                    ])
+                elif self.name in ["cpu", "ram", "disk", "battery"]:
                     try:
                         percent = float(value.split()[0])
                     except Exception:
                         percent = 0
-                    color = get_risk_color(self.name, percent)
+                    color = get_risk_color(self.name, percent, getattr(self, "theme", "light"))
                     text = f"{self.title}\n{value}"
+                    self.root.after(0, lambda: [self.label.config(text=text, foreground=color), self.root.update_idletasks(), self.root.geometry("")])
                 else:
-                    color = "white"
+                    color = "#222222" if getattr(self, "theme", "light") == "light" else "#ffffff"
                     text = f"{self.title}\n{value}"
-                self.root.after(0, lambda: [self.label.config(text=text, foreground=color), self.root.update_idletasks(), self.root.geometry("")])
+                    self.root.after(0, lambda: [self.label.config(text=text, foreground=color), self.root.update_idletasks(), self.root.geometry("")])
                 time.sleep(config["refresh_rate"])
             except Exception as e:
                 self.root.after(0, lambda: self.label.config(text=f"Error: {e}", foreground="red"))
@@ -223,9 +260,13 @@ def create_system_tray():
     def on_quit(icon, item):
         for widget in widgets:
             widget.stop()
-        icon.stop()
-        main_root.quit()  # Ensure main window closes
-        sys.exit()
+        if icon:
+            icon.stop()
+        # Use after to quit Tkinter from the main thread
+        try:
+            main_root.after(0, main_root.quit)
+        except Exception:
+            pass
 
     def toggle_widget(widget_name):
         widget = next(w for w in widgets if w.name == widget_name)
@@ -248,7 +289,6 @@ def create_system_tray():
 def add_to_startup():
     """
     Adds a shortcut to this script in the Windows Startup folder if not already present.
-    Called at startup to ensure auto-launch on boot.
     """
     try:
         script_path = os.path.abspath(__file__)
@@ -263,6 +303,18 @@ def add_to_startup():
             shortcut.save()
     except Exception as e:
         print(f"Failed to add to startup: {e}")
+
+def remove_from_startup():
+    """
+    Removes the shortcut from the Windows Startup folder if it exists.
+    """
+    try:
+        startup_folder = os.path.join(os.getenv('APPDATA'), r'Microsoft\Windows\Start Menu\Programs\Startup')
+        shortcut_path = os.path.join(startup_folder, "SystemDashboard.lnk")
+        if os.path.exists(shortcut_path):
+            os.remove(shortcut_path)
+    except Exception as e:
+        print(f"Failed to remove from startup: {e}")
 
 # --- Data Functions ---
 def get_cpu_usage():
@@ -281,8 +333,14 @@ def get_ram_usage():
 def get_disk_usage():
     """
     Returns current Disk usage as a string (e.g., '67 %'). Used by Disk widget.
+    Uses the system drive on Windows, '/' on other OS.
     """
-    disk = psutil.disk_usage('/')
+    import platform
+    if platform.system() == "Windows":
+        drive = os.environ.get("SystemDrive", "C:") + "\\"
+    else:
+        drive = "/"
+    disk = psutil.disk_usage(drive)
     return f"{disk.percent} %"
 
 def get_battery_status():
@@ -298,23 +356,50 @@ def get_battery_status():
 
 def get_risk_summary():
     """
-    Aggregates risk levels from all enabled widgets and returns a summary string.
+    Aggregates risk levels from all enabled widgets and returns a detailed summary string.
+    Shows which resource is at risk and why.
     Used by the Risk widget.
     """
-    risks = []
+    summary = []
+    # CPU
     if config["cpu_widget"]["enabled"]:
         cpu = float(get_cpu_usage().split()[0])
-        risks.append(get_risk_level(cpu, {"medium": 70, "high": 90})[0])
+        if cpu >= 90:
+            summary.append(f"CPU usage is CRITICAL ({cpu:.0f}%)")
+        elif cpu >= 70:
+            summary.append(f"CPU usage is HIGH ({cpu:.0f}%)")
+        elif cpu >= 50:
+            summary.append(f"CPU usage is MODERATE ({cpu:.0f}%)")
+    # RAM
     if config["ram_widget"]["enabled"]:
         ram = float(get_ram_usage().split()[0])
-        risks.append(get_risk_level(ram, {"medium": 70, "high": 90})[0])
+        if ram >= 90:
+            summary.append(f"RAM usage is CRITICAL ({ram:.0f}%)")
+        elif ram >= 70:
+            summary.append(f"RAM usage is HIGH ({ram:.0f}%)")
+        elif ram >= 50:
+            summary.append(f"RAM usage is MODERATE ({ram:.0f}%)")
+    # Disk
     if config["disk_widget"]["enabled"]:
         disk = float(get_disk_usage().split()[0])
-        risks.append(get_risk_level(disk, {"medium": 80, "high": 90})[0])
+        if disk >= 90:
+            summary.append(f"Disk usage is CRITICAL ({disk:.0f}%)")
+        elif disk >= 80:
+            summary.append(f"Disk usage is HIGH ({disk:.0f}%)")
+        elif disk >= 50:
+            summary.append(f"Disk usage is MODERATE ({disk:.0f}%)")
+    # Battery
     if config["battery_widget"]["enabled"] and get_battery_status() != "N/A":
         batt = float(get_battery_status().split()[0])
-        risks.append(get_risk_level(batt, {"medium": 30, "high": 10})[0])
-    return "\n".join(risks) or "No risks"
+        if batt <= 10:
+            summary.append(f"Battery is CRITICALLY LOW ({batt:.0f}%)")
+        elif batt <= 30:
+            summary.append(f"Battery is LOW ({batt:.0f}%)")
+        elif batt <= 75:
+            summary.append(f"Battery is MODERATE ({batt:.0f}%)")
+    if not summary:
+        return "All systems normal."
+    return "\n".join(summary)
 
 def get_network_usage():
     """
@@ -374,6 +459,7 @@ def create_main_window():
     Allows user to control all widgets from one place.
     """
     global main_root
+    global startup_var
 
     def on_quit(icon, item):
         for widget in widgets:
@@ -381,15 +467,20 @@ def create_main_window():
         if icon:
             icon.stop()
         main_root.quit()
-        sys.exit()
 
     def toggle_widget(widget_name):
         widget = next(w for w in widgets if w.name == widget_name)
         widget.toggle(not widget.enabled)
 
+    def on_startup_toggle():
+        if startup_var.get():
+            add_to_startup()
+        else:
+            remove_from_startup()
+
     main_root = tk.Tk()
     main_root.title("System Dashboard Control")
-    main_root.geometry("300x300")
+    main_root.geometry("300x400")
     main_root.configure(bg='#2b2b2b')
 
     # Apply dark theme to ttk widgets
@@ -397,6 +488,14 @@ def create_main_window():
     style.theme_use('clam')  # Use 'clam' theme for customizability
     style.configure('TButton', background='#3c3c3c', foreground='#ffffff', bordercolor='#555555')
     style.configure('TLabel', background='#2b2b2b', foreground='#ffffff')
+
+    # Startup toggle
+    startup_var = tk.BooleanVar()
+    # Check if shortcut exists
+    startup_folder = os.path.join(os.getenv('APPDATA'), r'Microsoft\Windows\Start Menu\Programs\Startup')
+    shortcut_path = os.path.join(startup_folder, "SystemDashboard.lnk")
+    startup_var.set(os.path.exists(shortcut_path))
+    ttk.Checkbutton(main_root, text="Start at Windows Startup", variable=startup_var, command=on_startup_toggle).pack(pady=5)
 
     # Buttons
     ttk.Button(main_root, text="Close All", command=lambda: on_quit(None, None)).pack(pady=5)
@@ -442,8 +541,7 @@ if __name__ == "__main__":
     config = load_config()
     # 2. Set default widget positions if needed
     initialize_grid_positions()
-    # 3. Add to Windows startup if not already present
-    ##add_to_startup()
+    # 3. Startup shortcut is now user-controlled, do not auto-add/remove
     # 4. Create all widget objects (but only show if enabled)
     widgets = [
         ResourceWidget("cpu", "CPU Usage", get_cpu_usage, {"medium": 70, "high": 90}),
@@ -470,3 +568,31 @@ if __name__ == "__main__":
     tray_thread.start()
     # 8. Start the Tkinter main loop (blocks until app closes)
     main_root.mainloop()
+    # After mainloop ends, force exit to ensure all threads/processes are killed
+    import os
+    os._exit(0)
+
+"""
+Workflow of the Script:
+
+1. Initialization:
+   - The script sets up necessary imports, configurations, and initializes required objects (such as widgets and the main Tkinter root window).
+
+2. Widget Handling:
+   - It iterates through all available widgets.
+   - For each widget that is enabled (`widget.enabled` is True), it calls `widget.create_widget()` to add it to the GUI.
+
+3. System Tray Icon:
+   - A separate background thread is started to handle the system tray icon using `threading.Thread`.
+   - This allows the tray icon to function independently without blocking the main GUI.
+
+4. Main Event Loop:
+   - The Tkinter main loop (`main_root.mainloop()`) is started.
+   - This loop keeps the GUI responsive and running until the user closes the application.
+
+Key Points:
+- Widgets are only created if they are enabled.
+- The system tray icon runs in a background thread to avoid freezing the GUI.
+- The main loop is blocking, so all setup must be done before calling it.
+"""
+
